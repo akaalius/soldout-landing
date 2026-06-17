@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="glow" cx="78%" cy="18%" r="60%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.42"/>
+      <stop offset="60%" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="12%" cy="92%" r="55%">
+      <stop offset="0%" stop-color="#384478" stop-opacity="0.40"/>
+      <stop offset="60%" stop-color="#384478" stop-opacity="0"/>
+    </radialGradient>
+    <style>
+      text { font-family: 'Onest', 'DejaVu Sans', sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="630" fill="#0a0b10"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <rect width="1200" height="630" fill="url(#glow2)"/>
+
+  <!-- logo -->
+  <g transform="translate(80,74)">
+    <path d="M0 26L13 9.5L22 15.5L40 -6" fill="none" stroke="#a78bfa" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="40" cy="-6" r="6.2" fill="#8b5cf6"/>
+    <text x="58" y="6" font-size="30" font-weight="600" fill="#eef1fb">soldout<tspan fill="#a78bfa">.ai</tspan></text>
+  </g>
+
+  <!-- headline -->
+  <text x="80" y="300" font-size="66" font-weight="800" fill="#eef1fb" letter-spacing="-2">Спросите - и узнайте,</text>
+  <text x="80" y="378" font-size="66" font-weight="800" fill="#eef1fb" letter-spacing="-2">как идёт концертный бизнес</text>
+
+  <!-- sub -->
+  <text x="82" y="452" font-size="29" font-weight="500" fill="#8b93a7">AI-аналитик в Telegram на базе Google Gemini.</text>
+  <text x="82" y="492" font-size="29" font-weight="500" fill="#8b93a7">Единый ROMI, прогноз распродажи, финмодель.</text>
+
+  <!-- decorative sparkline -->
+  <g transform="translate(80,548)">
+    <polyline points="0,18 60,12 120,15 180,4 240,7 300,-6 360,-2 420,-14"
+      fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="420" cy="-14" r="5" fill="#8b5cf6"/>
+  </g>
+</svg>

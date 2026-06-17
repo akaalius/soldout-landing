@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="ru" data-lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>soldout.ai - AI-аналитик для концертного бизнеса</title>
+  <meta name="description" content="AI-аналитик в Telegram отвечает на вопросы по продажам, рекламе и прибыли за секунды. Вся аналитика, маркетинг и финансы концертного бизнеса в одном месте." />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="soldout.ai - AI-аналитик для концертного бизнеса" />
+  <meta property="og:description" content="Спросите - и узнайте, как идёт ваш концертный бизнес. AI-аналитик в Telegram на базе Google Gemini, единый ROMI по всем каналам, прогноз распродажи, финмодель." />
+  <meta property="og:image" content="assets/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0a0b10" />
+
+  <!-- MVP: Tailwind Play CDN + Google Fonts (Unbounded + Manrope, оба с кириллицей).
+       Для прода компилируем Tailwind и self-host шрифтов. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Phosphor icons (web font) -->
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            base:    "#0a0b10",
+            panel:   "#12141d",
+            accent:  "#8b5cf6",
+            accentL: "#a78bfa",
+            green:   "#10b981",
+            content: "#eef1fb",
+            muted:   "#8b93a7",
+          },
+          fontFamily: {
+            display: ['"Onest"', "system-ui", "sans-serif"],
+            mark:    ['"Onest"', "system-ui", "sans-serif"],
+            sans:    ['"Onest"', "system-ui", "sans-serif"],
+          },
+          maxWidth: { shell: "1240px" },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --f-body: 'Onest', system-ui, sans-serif;      /* текст */
+      --f-head: 'Onest', system-ui, sans-serif;      /* заголовки, логотип, цифры */
+    }
+    html { scroll-behavior: smooth; }
+    body { background: #0a0b10; font-family: var(--f-body); }
+    /* buttons/inputs не наследуют шрифт по умолчанию - заставляем */
+    button, input, textarea, select { font-family: inherit; }
+    .font-display, .font-mark { font-family: var(--f-head) !important; }
+
+    /* Language toggle */
+    html[data-lang="ru"] .lang-en { display: none; }
+    html[data-lang="en"] .lang-ru { display: none; }
+
+    /* Ambient brand glow - restrained, single source, brand-justified violet */
+    .ambient {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    }
+    .ambient::before {
+      content: ""; position: absolute; width: 70vw; height: 70vw;
+      top: -22vw; right: -14vw; border-radius: 50%;
+      background: radial-gradient(circle, rgba(139,92,246,.30), rgba(139,92,246,0) 62%);
+      filter: blur(20px);
+    }
+    .ambient::after {
+      content: ""; position: absolute; width: 50vw; height: 50vw;
+      bottom: -24vw; left: -16vw; border-radius: 50%;
+      background: radial-gradient(circle, rgba(56,68,120,.30), rgba(56,68,120,0) 60%);
+      filter: blur(20px);
+    }
+
+    /* Fine grain - fixed, pointer-events none */
+    .grain {
+      position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .035;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* Glass panel */
+    .glass {
+      background: linear-gradient(155deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+      backdrop-filter: blur(22px) saturate(150%);
+      -webkit-backdrop-filter: blur(22px) saturate(150%);
+      border: 1px solid rgba(255,255,255,.10);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 26px 70px rgba(0,0,0,.45);
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      .glass { background: #161826; backdrop-filter: none; -webkit-backdrop-filter: none; }
+    }
+
+    /* Entrance + float motion (MOTION 5) */
+    @keyframes rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+    @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    .rise { opacity: 0; animation: rise .9s cubic-bezier(.16,1,.3,1) forwards; }
+    .d1 { animation-delay: .05s; } .d2 { animation-delay: .15s; } .d3 { animation-delay: .25s; }
+    .d4 { animation-delay: .35s; } .d5 { animation-delay: .45s; }
+    .float { animation: floaty 7s ease-in-out infinite; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .rise { opacity: 1; animation: none; }
+      .float { animation: none; }
+      html { scroll-behavior: auto; }
+    }
+
+    .btn-press:active { transform: translateY(1px) scale(.985); }
+
+    /* Scroll reveal */
+    .reveal { opacity: 0; transform: translateY(26px); transition: opacity .8s cubic-bezier(.16,1,.3,1), transform .8s cubic-bezier(.16,1,.3,1); }
+    .reveal.in { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
+    .hairline { border-top: 1px solid rgba(255,255,255,.07); }
+    .chip { border: 1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.03); }
+
+    /* prevent stray horizontal page scroll; hide carousel scrollbar */
+    html, body { overflow-x: hidden; }
+    #kf-track { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    #kf-track::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+
+<body class="font-sans text-content antialiased selection:bg-accent/30">
+  <div class="ambient"></div>
+  <div class="grain"></div>
+
+  <div class="relative z-10">
+    <!-- ── NAV ─────────────────────────────────────────────────────────── -->
+    <header class="mx-auto max-w-shell px-6">
+      <nav class="flex h-[68px] items-center justify-between">
+        <a href="#" class="flex items-center gap-2.5">
+          <!-- sellout sparkline mark -->
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+            <path d="M3 19L9 12.5L13 15.5L21.5 6.5" stroke="#a78bfa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="21.5" cy="6.5" r="3.2" fill="#8b5cf6"/>
+          </svg>
+          <span class="font-mark text-[17px] font-500 tracking-tight">soldout<span class="text-accentL">.ai</span></span>
+        </a>
+
+        <div class="flex items-center gap-3 sm:gap-5">
+          <!-- lang toggle -->
+          <div class="flex items-center rounded-full border border-white/10 p-0.5 text-[12px] font-500">
+            <button data-set-lang="ru" class="rounded-full px-2.5 py-1 text-content transition" aria-label="Русский">RU</button>
+            <button data-set-lang="en" class="rounded-full px-2.5 py-1 text-muted transition" aria-label="English">EN</button>
+          </div>
+          <a href="https://t.me/pasee2" target="_blank" rel="noopener"
+             class="btn-press rounded-full bg-accent px-4 py-2 text-[13px] font-600 text-white shadow-[0_8px_24px_rgba(139,92,246,.35)] transition hover:bg-accentL">
+            <span class="lang-ru">Написать в Telegram</span>
+            <span class="lang-en">Message on Telegram</span>
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <!-- ── HERO ────────────────────────────────────────────────────────── -->
+    <section class="mx-auto grid max-w-shell items-center gap-12 px-6 pb-24 pt-10 md:grid-cols-[1.05fr_.95fr] md:gap-10 md:pt-16 lg:gap-16">
+      <!-- left: copy -->
+      <div>
+        <p class="rise d1 mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[.03] px-3 py-1 text-[12.5px] font-500 text-accentL">
+          <span class="h-1.5 w-1.5 rounded-full bg-green"></span>
+          <span class="lang-ru">AI-аналитик для концертного бизнеса</span>
+          <span class="lang-en">AI analyst for the live-events business</span>
+        </p>
+
+        <h1 class="rise d2 font-display text-[40px] font-800 leading-[1.04] tracking-[-0.03em] sm:text-[52px] lg:text-[60px]">
+          <span class="lang-ru">Спросите - и узнайте,<br>как идёт концертный бизнес</span>
+          <span class="lang-en">Ask, and know how<br>your events are doing</span>
+        </h1>
+
+        <p class="rise d3 mt-6 max-w-[34ch] text-[17px] leading-relaxed text-muted">
+          <span class="lang-ru">AI-аналитик в Telegram отвечает на вопросы по продажам, рекламе и прибыли за секунды. Глубина - в дашбордах, когда нужно.</span>
+          <span class="lang-en">An AI analyst in Telegram answers your sales, ad-ROI and profit questions in seconds. Full dashboards when you need depth.</span>
+        </p>
+
+        <div class="rise d4 mt-8 flex flex-wrap items-center gap-3">
+          <a href="https://t.me/pasee2" target="_blank" rel="noopener"
+             class="btn-press rounded-full bg-accent px-6 py-3 text-[15px] font-600 text-white shadow-[0_10px_30px_rgba(139,92,246,.4)] transition hover:bg-accentL">
+            <span class="lang-ru">Написать в Telegram</span>
+            <span class="lang-en">Message on Telegram</span>
+          </a>
+          <a href="#request"
+             class="btn-press rounded-full border border-white/15 bg-white/[.04] px-6 py-3 text-[15px] font-600 text-content transition hover:bg-white/[.08]">
+            <span class="lang-ru">Оставить заявку</span>
+            <span class="lang-en">Request access</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- right: glass AI-chat (the hook in action) -->
+      <div class="rise d5">
+        <div class="glass float rounded-[22px] p-3.5 sm:p-4">
+          <!-- chat header -->
+          <div class="flex items-center justify-between px-1.5 pb-3">
+            <div class="flex items-center gap-2.5">
+              <span class="grid h-8 w-8 place-items-center rounded-full bg-accent/20 text-accentL">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 19L9 12.5L13 15.5L21.5 6.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21.5" cy="6.5" r="2.6" fill="currentColor"/></svg>
+              </span>
+              <div class="leading-tight">
+                <p class="text-[13px] font-600">soldout.ai</p>
+                <p class="text-[11px] text-green">online</p>
+              </div>
+            </div>
+            <span class="text-[11px] text-muted">Telegram</span>
+          </div>
+
+          <!-- interactive thread (populated by demo JS) -->
+          <div id="chat-thread" class="space-y-2.5 overflow-hidden px-1" style="min-height:190px"></div>
+
+          <!-- clickable questions -->
+          <div id="demo-rail" class="mt-3 flex flex-wrap gap-1.5 px-1"></div>
+
+          <!-- input (decorative) -->
+          <div class="mt-3 flex items-center gap-2 rounded-full border border-white/10 bg-white/[.03] px-4 py-2.5">
+            <span class="flex-1 text-[13px] text-muted">
+              <span class="lang-ru">Спросите что угодно о ваших продажах…</span>
+              <span class="lang-en">Ask anything about your sales…</span>
+            </span>
+            <span class="grid h-7 w-7 place-items-center rounded-full bg-accent text-white">
+              <i class="ph ph-arrow-right text-[14px]"></i>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TRUST / FACTS ───────────────────────────────────────────────── -->
+    <section class="hairline">
+      <div class="mx-auto max-w-shell px-6 py-10">
+        <div class="reveal flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="mb-3.5 text-[12.5px] font-600 uppercase tracking-[0.16em] text-muted">
+              <span class="lang-ru">Подключается к вашему стеку</span><span class="lang-en">Connects to your stack</span>
+            </p>
+            <div class="flex flex-wrap gap-2.5">
+              <span class="chip rounded-full px-3.5 py-1.5 text-[13px] font-500"><span class="lang-ru">Билетные системы</span><span class="lang-en">Ticketing systems</span></span>
+              <span class="chip rounded-full px-3.5 py-1.5 text-[13px] font-500"><span class="lang-ru">Рекламные кабинеты</span><span class="lang-en">Ad accounts</span></span>
+              <span class="chip rounded-full px-3.5 py-1.5 text-[13px] font-500"><span class="lang-ru">Аналитика трафика</span><span class="lang-en">Traffic analytics</span></span>
+              <span class="chip rounded-full px-3.5 py-1.5 text-[13px] font-500"><span class="lang-ru">Офлайн-каналы</span><span class="lang-en">Offline channels</span></span>
+              <span class="chip rounded-full px-3.5 py-1.5 text-[13px] font-500">Telegram</span>
+              <span class="rounded-full px-2 py-1.5 text-[13px] text-muted"><span class="lang-ru">и другие по запросу</span><span class="lang-en">and more on request</span></span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-x-8 gap-y-5">
+            <div class="min-w-0"><p class="font-mark text-[20px] font-600 leading-none text-accentL">81+</p><p class="mt-1.5 text-[12.5px] text-muted"><span class="lang-ru">AI-инструмента</span><span class="lang-en">AI tools</span></p></div>
+            <div class="min-w-0"><p class="font-mark text-[20px] font-600 leading-none text-accentL"><span class="lang-ru">онлайн и офлайн</span><span class="lang-en">online and offline</span></p><p class="mt-1.5 text-[12.5px] text-muted"><span class="lang-ru">каналы в ROMI</span><span class="lang-en">channels in ROMI</span></p></div>
+            <div class="min-w-0"><p class="font-mark text-[20px] font-600 leading-none text-accentL">24/7</p><p class="mt-1.5 text-[12.5px] text-muted"><span class="lang-ru">в реальном времени</span><span class="lang-en">real time</span></p></div>
+            <div class="min-w-0"><p class="font-mark text-[20px] font-600 leading-none text-accentL">RU / EN</p><p class="mt-1.5 text-[12.5px] text-muted"><span class="lang-ru">интерфейс и бот</span><span class="lang-en">app and bot</span></p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PROBLEM ─────────────────────────────────────────────────────── -->
+    <section class="mx-auto max-w-shell px-6 py-24 md:py-32">
+      <div class="reveal grid gap-14 lg:grid-cols-[1fr_.85fr] lg:items-center lg:gap-20">
+        <div>
+          <h2 class="font-display text-[34px] font-700 leading-[1.06] tracking-[-0.025em] sm:text-[46px]">
+            <span class="lang-ru">Данные есть.<br>Ответов нет.</span>
+            <span class="lang-en">You have the data.<br>Not the answers.</span>
+          </h2>
+          <p class="mt-6 max-w-[44ch] text-[17px] leading-relaxed text-muted">
+            <span class="lang-ru">Билетная система, рекламные кабинеты, аналитика трафика, офлайн-каналы. Вы сводите это руками, чтобы понять простое: какой концерт в плюсе и куда уходит бюджет.</span>
+            <span class="lang-en">Ticketing, ad accounts, web analytics, offline channels. You stitch them by hand to answer the basics: which show is profitable and where the budget leaks.</span>
+          </p>
+        </div>
+
+        <!-- many sources converge into one -->
+        <div class="mx-auto w-full max-w-[380px]">
+          <div class="space-y-2">
+            <div class="chip flex items-center gap-3 rounded-xl px-4 py-3 text-[13.5px] text-muted"><i class="ph ph-ticket text-[18px]"></i><span class="lang-ru">Билетная система</span><span class="lang-en">Ticketing</span></div>
+            <div class="chip flex items-center gap-3 rounded-xl px-4 py-3 text-[13.5px] text-muted"><i class="ph ph-megaphone-simple text-[18px]"></i><span class="lang-ru">Рекламные кабинеты</span><span class="lang-en">Ad accounts</span></div>
+            <div class="chip flex items-center gap-3 rounded-xl px-4 py-3 text-[13.5px] text-muted"><i class="ph ph-chart-line text-[18px]"></i><span class="lang-ru">Аналитика трафика</span><span class="lang-en">Traffic analytics</span></div>
+            <div class="chip flex items-center gap-3 rounded-xl px-4 py-3 text-[13.5px] text-muted"><i class="ph ph-map-pin text-[18px]"></i><span class="lang-ru">Наружка и посевы</span><span class="lang-en">Offline channels</span></div>
+          </div>
+          <div class="flex justify-center py-2.5 text-muted"><i class="ph ph-arrow-down text-[20px]"></i></div>
+          <div class="glass flex items-center gap-3 rounded-2xl px-5 py-4">
+            <svg width="20" height="20" viewBox="0 0 26 26" fill="none"><path d="M3 19L9 12.5L13 15.5L21.5 6.5" stroke="#a78bfa" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21.5" cy="6.5" r="3.2" fill="#8b5cf6"/></svg>
+            <span class="text-[15px] font-700"><span class="lang-ru">Один экран. Один ответ.</span><span class="lang-en">One screen. One answer.</span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── THE SHIFT ───────────────────────────────────────────────────── -->
+    <section class="hairline">
+      <div class="mx-auto max-w-shell px-6 py-24 text-center md:py-32">
+        <h2 class="reveal mx-auto max-w-[18ch] font-display text-[36px] font-600 leading-[1.07] tracking-[-0.02em] sm:text-[52px]">
+          <span class="lang-ru">Перестаньте копаться.<br>Просто спросите.</span>
+          <span class="lang-en">Stop digging.<br>Just ask.</span>
+        </h2>
+        <p class="reveal mx-auto mt-6 max-w-[52ch] text-[17px] leading-relaxed text-muted">
+          <span class="lang-ru">AI-аналитик знает ваши продажи, рекламу и финансы. Спросите словами - получите ответ с цифрами, а не ссылку на дашборд.</span>
+          <span class="lang-en">The AI analyst knows your sales, ads and finance. Ask in plain words and get an answer with numbers, not a link to a dashboard.</span>
+        </p>
+
+        <div class="reveal mx-auto mt-10 flex max-w-[820px] flex-wrap justify-center gap-2.5">
+          <span class="chip rounded-full px-4 py-2 text-[14px]"><span class="lang-ru">Какой концерт в минусе?</span><span class="lang-en">Which show is losing money?</span></span>
+          <span class="chip rounded-full px-4 py-2 text-[14px]"><span class="lang-ru">Куда сливается бюджет?</span><span class="lang-en">Where is the budget leaking?</span></span>
+          <span class="chip rounded-full px-4 py-2 text-[14px]"><span class="lang-ru">Успеем распродать зал?</span><span class="lang-en">Will we sell out in time?</span></span>
+          <span class="chip rounded-full px-4 py-2 text-[14px]"><span class="lang-ru">Лучший канал за неделю?</span><span class="lang-en">Best channel this week?</span></span>
+          <span class="chip rounded-full px-4 py-2 text-[14px]"><span class="lang-ru">Сколько вернули вчера?</span><span class="lang-en">How many refunds yesterday?</span></span>
+        </div>
+
+        <div class="reveal mx-auto mt-12 flex max-w-[780px] flex-col items-center justify-center gap-5 sm:flex-row sm:gap-8">
+          <div class="flex items-center gap-2.5"><i class="ph ph-chat-text text-[20px] text-accentL"></i><span class="text-[14px]"><span class="lang-ru">Понимает живой язык</span><span class="lang-en">Plain language</span></span></div>
+          <div class="hidden h-4 w-px bg-white/12 sm:block"></div>
+          <div class="flex items-center gap-2.5"><i class="ph ph-sparkle text-[20px] text-accentL"></i><span class="text-[14px]"><span class="lang-ru">На базе Google Gemini</span><span class="lang-en">Powered by Google Gemini</span></span></div>
+          <div class="hidden h-4 w-px bg-white/12 sm:block"></div>
+          <div class="flex items-center gap-2.5"><i class="ph ph-database text-[20px] text-accentL"></i><span class="text-[14px]"><span class="lang-ru">Работает на ваших данных</span><span class="lang-en">Runs on your live data</span></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── WHAT'S INSIDE (BENTO) ───────────────────────────────────────── -->
+    <section class="mx-auto max-w-shell px-6 py-24 md:py-32">
+      <div class="reveal mb-12 max-w-[36ch]">
+        <p class="mb-3 text-[12.5px] font-500 uppercase tracking-[0.16em] text-accentL">
+          <span class="lang-ru">Что внутри</span><span class="lang-en">What's inside</span>
+        </p>
+        <h2 class="font-display text-[34px] font-600 leading-[1.08] tracking-[-0.02em] sm:text-[44px]">
+          <span class="lang-ru">Полноценная система. Не ещё один график.</span>
+          <span class="lang-en">A full system. Not one more chart.</span>
+        </h2>
+      </div>
+
+      <div class="reveal grid gap-4 md:grid-cols-3">
+        <!-- A: KPI + forecast, spans 2 -->
+        <div class="glass flex flex-col justify-between rounded-2xl p-6 md:col-span-2">
+          <div>
+            <p class="text-[15px] font-600"><span class="lang-ru">KPI и прогноз распродажи</span><span class="lang-en">Live KPI and sellout forecast</span></p>
+            <p class="mt-1.5 max-w-[42ch] text-[14px] leading-relaxed text-muted"><span class="lang-ru">Продажи в реальном времени и сигнал по каждому показу: успеваем, под риском или отстаём.</span><span class="lang-en">Real-time sales and a per-show signal: on track, at risk or behind.</span></p>
+          </div>
+          <div class="mt-6 flex items-end gap-1.5">
+            <div class="h-10 w-full rounded-md bg-green/70"></div>
+            <div class="h-16 w-full rounded-md bg-green/70"></div>
+            <div class="h-12 w-full rounded-md bg-accent/70"></div>
+            <div class="h-24 w-full rounded-md bg-accent"></div>
+            <div class="h-20 w-full rounded-md bg-accent/70"></div>
+            <div class="h-28 w-full rounded-md bg-accentL"></div>
+            <div class="h-[7.5rem] w-full rounded-md bg-accentL"></div>
+          </div>
+        </div>
+        <!-- B: ROMI -->
+        <div class="glass flex flex-col justify-between rounded-2xl p-6">
+          <div>
+            <p class="text-[15px] font-600"><span class="lang-ru">Единый ROMI по каналам</span><span class="lang-en">Unified ROMI by channel</span></p>
+            <p class="mt-1.5 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Реклама, наружка и посевы в одной честной выручке на рубль.</span><span class="lang-en">Ads, outdoor and seeding in one honest revenue-per-spend.</span></p>
+          </div>
+          <div class="mt-6 space-y-2 text-[12.5px]">
+            <div class="flex items-center justify-between"><span class="text-muted">VK</span><span class="text-green font-600">+26%</span></div>
+            <div class="h-1.5 rounded-full bg-white/10"><div class="h-full w-[62%] rounded-full bg-green"></div></div>
+            <div class="flex items-center justify-between"><span class="text-muted">Яндекс</span><span class="text-green font-600">+14%</span></div>
+            <div class="h-1.5 rounded-full bg-white/10"><div class="h-full w-[48%] rounded-full bg-accentL"></div></div>
+          </div>
+        </div>
+        <!-- C: reviews + competitors -->
+        <div class="glass rounded-2xl p-6">
+          <span class="mb-4 grid h-9 w-9 place-items-center rounded-lg bg-accent/15 text-accentL"><i class="ph ph-radar text-[19px]"></i></span>
+          <p class="text-[15px] font-600"><span class="lang-ru">Отзывы и конкуренты</span><span class="lang-en">Reviews and competitors</span></p>
+          <p class="mt-1.5 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Рейтинг по площадкам и афиши конкурентов по городам.</span><span class="lang-en">Ratings across platforms and rival line-ups by city.</span></p>
+        </div>
+        <!-- D: finance -->
+        <div class="glass rounded-2xl p-6">
+          <span class="mb-4 grid h-9 w-9 place-items-center rounded-lg bg-accent/15 text-accentL"><i class="ph ph-wallet text-[19px]"></i></span>
+          <p class="text-[15px] font-600"><span class="lang-ru">Финмодель: P&amp;L и ДДС</span><span class="lang-en">Finance: P&amp;L and cash flow</span></p>
+          <p class="mt-1.5 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Прибыльность по концертам, вклад и кассовые разрывы по неделям.</span><span class="lang-en">Per-show profit, contribution and weekly cash gaps.</span></p>
+        </div>
+        <!-- E: alerts -->
+        <div class="glass rounded-2xl p-6">
+          <span class="mb-4 grid h-9 w-9 place-items-center rounded-lg bg-accent/15 text-accentL"><i class="ph ph-bell-ringing text-[19px]"></i></span>
+          <p class="text-[15px] font-600"><span class="lang-ru">Алёрты в Telegram</span><span class="lang-en">Alerts in Telegram</span></p>
+          <p class="mt-1.5 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Низкие продажи, близкий sold out, скачок возвратов - сразу в чат.</span><span class="lang-en">Low sales, near sellout, refund spikes - straight to your chat.</span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── KILLER FEATURES (carousel) ─────────────────────────────────── -->
+    <section class="hairline">
+      <div class="mx-auto max-w-shell px-6 py-24 md:py-32">
+        <div class="reveal mb-10 flex items-end justify-between gap-4">
+          <div class="max-w-[34ch]">
+            <p class="mb-3 text-[12.5px] font-600 uppercase tracking-[0.16em] text-accentL">
+              <span class="lang-ru">Киллер-фичи</span><span class="lang-en">Killer features</span>
+            </p>
+            <h2 class="font-display text-[34px] font-700 leading-[1.06] tracking-[-0.025em] sm:text-[44px]">
+              <span class="lang-ru">Чего нет у билетных систем</span>
+              <span class="lang-en">What ticketing systems do not have</span>
+            </h2>
+          </div>
+          <div class="hidden gap-2 sm:flex">
+            <button id="kf-prev" class="btn-press grid h-11 w-11 place-items-center rounded-full border border-white/12 bg-white/[.04] text-[18px] transition hover:bg-white/[.08]" aria-label="Prev"><i class="ph ph-arrow-left"></i></button>
+            <button id="kf-next" class="btn-press grid h-11 w-11 place-items-center rounded-full border border-white/12 bg-white/[.04] text-[18px] transition hover:bg-white/[.08]" aria-label="Next"><i class="ph ph-arrow-right"></i></button>
+          </div>
+        </div>
+
+        <div id="kf-track" class="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2" style="scrollbar-width:none">
+          <!-- 1: Offline in ROMI -->
+          <article class="kf-slide w-[88%] shrink-0 snap-start sm:w-[620px]">
+            <div class="glass grid h-full gap-6 rounded-2xl p-7 sm:grid-cols-2 sm:items-center">
+              <div>
+                <span class="mb-4 grid h-9 w-9 place-items-center rounded-lg bg-accent/15 text-accentL"><i class="ph ph-map-pin-area text-[19px]"></i></span>
+                <h3 class="text-[19px] font-700"><span class="lang-ru">Офлайн в ROMI</span><span class="lang-en">Offline in ROMI</span></h3>
+                <p class="mt-2 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Наружка, посевы и платные посты считаются вместе с Яндексом и VK. Один ROMI на все каналы.</span><span class="lang-en">Outdoor, seeding and paid posts counted together with online ads. One ROMI across every channel.</span></p>
+              </div>
+              <div>
+                <div class="flex items-end gap-2" style="height:140px">
+                  <div class="flex w-full flex-col gap-1"><div class="h-9 rounded bg-accentL/80"></div><div class="h-16 rounded bg-accent"></div></div>
+                  <div class="flex w-full flex-col gap-1"><div class="h-7 rounded bg-accentL/80"></div><div class="h-24 rounded bg-accent"></div></div>
+                  <div class="flex w-full flex-col gap-1"><div class="h-11 rounded bg-accentL/80"></div><div class="h-12 rounded bg-accent"></div></div>
+                  <div class="flex w-full flex-col gap-1"><div class="h-8 rounded bg-accentL/80"></div><div class="h-20 rounded bg-accent"></div></div>
+                  <div class="flex w-full flex-col gap-1"><div class="h-10 rounded bg-accentL/80"></div><div class="h-28 rounded bg-accent"></div></div>
+                </div>
+                <div class="mt-3 flex gap-4 text-[11.5px] text-muted">
+                  <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-accent"></span><span class="lang-ru">онлайн</span><span class="lang-en">online</span></span>
+                  <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-accentL/80"></span><span class="lang-ru">офлайн</span><span class="lang-en">offline</span></span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 2: Reviews -->
+          <article class="kf-slide w-[88%] shrink-0 snap-start sm:w-[620px]">
+            <div class="glass grid h-full gap-6 rounded-2xl p-7 sm:grid-cols-2 sm:items-center">
+              <div>
+                <span class="mb-4 grid h-9 w-9 place-items-center rounded-lg bg-accent/15 text-accentL"><i class="ph ph-star text-[19px]"></i></span>
+                <h3 class="text-[19px] font-700"><span class="lang-ru">Мониторинг отзывов</span><span class="lang-en">Review monitoring</span></h3>
+                <p class="mt-2 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Рейтинг и отзывы по площадкам в одном месте, с алёртом на негатив. Узнаёте о проблеме раньше продаж.</span><span class="lang-en">Ratings and reviews across platforms in one place, with alerts on negatives. You learn before sales suffer.</span></p>
+              </div>
+              <div>
+                <div class="flex items-baseline gap-2"><span class="font-mark text-[34px] font-600 text-content">4.6</span><i class="ph-fill ph-star text-[20px] text-accentL"></i></div>
+                <svg class="mt-2" width="100%" height="60" viewBox="0 0 220 60" preserveAspectRatio="none" fill="none"><polyline points="4,44 40,40 78,42 116,30 152,26 190,18 216,14" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="216" cy="14" r="3.4" fill="#8b5cf6"/></svg>
+                <p class="mt-2 text-[12px] text-muted"><span class="lang-ru">рейтинг растёт 3 месяца подряд</span><span class="lang-en">rating up 3 months straight</span></p>
+              </div>
+            </div>
+          </article>
+
+          <!-- 3: Competitors -->
+          <article class="kf-slide w-[88%] shrink-0 snap-start sm:w-[620px]">
+            <div class="glass grid h-full gap-6 rounded-2xl p-7 sm:grid-cols-2 sm:items-center">
+              <div>
+                <span class="mb-4 grid h-9 w-9 place-items-center rounded-lg bg-accent/15 text-accentL"><i class="ph ph-radar text-[19px]"></i></span>
+                <h3 class="text-[19px] font-700"><span class="lang-ru">Радар конкурентов</span><span class="lang-en">Competitor radar</span></h3>
+                <p class="mt-2 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Афиши конкурентов по городам и датам. Не ставьте концерт туда, где в тот же вечер играет другой.</span><span class="lang-en">Rival line-ups by city and date. Do not book a night a competitor already owns.</span></p>
+              </div>
+              <div>
+                <div class="grid grid-cols-5 gap-1.5">
+                  <!-- 5 cols x 4 rows mini calendar, fuchsia = competitor -->
+                  <div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-fuchsia-500/70"></div><div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-accent/70"></div>
+                  <div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-fuchsia-500/70"></div><div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-white/[.05]"></div>
+                  <div class="aspect-square rounded bg-accent/70"></div><div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-fuchsia-500/70"></div><div class="aspect-square rounded bg-white/[.05]"></div>
+                  <div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-fuchsia-500/70"></div><div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-white/[.05]"></div><div class="aspect-square rounded bg-accent/70"></div>
+                </div>
+                <div class="mt-3 flex gap-4 text-[11.5px] text-muted">
+                  <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-accent/70"></span><span class="lang-ru">наш концерт</span><span class="lang-en">our show</span></span>
+                  <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-fuchsia-500/70"></span><span class="lang-ru">конкурент</span><span class="lang-en">competitor</span></span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 4: Finance -->
+          <article class="kf-slide w-[88%] shrink-0 snap-start sm:w-[620px]">
+            <div class="glass grid h-full gap-6 rounded-2xl p-7 sm:grid-cols-2 sm:items-center">
+              <div>
+                <span class="mb-4 grid h-9 w-9 place-items-center rounded-lg bg-accent/15 text-accentL"><i class="ph ph-wallet text-[19px]"></i></span>
+                <h3 class="text-[19px] font-700"><span class="lang-ru">Финмодель, а не только ROI</span><span class="lang-en">Finance, not just ROI</span></h3>
+                <p class="mt-2 text-[14px] leading-relaxed text-muted"><span class="lang-ru">P&amp;L по концертам, ДДС по неделям, вклад и светофор зон. Видите прибыль и кассовые разрывы.</span><span class="lang-en">Per-show P&amp;L, weekly cash flow, contribution and RAG zones. See profit and cash gaps.</span></p>
+              </div>
+              <div>
+                <div class="flex items-end gap-2.5" style="height:140px">
+                  <div class="flex w-full flex-col items-center gap-1.5"><div class="w-full rounded bg-green" style="height:120px"></div><span class="text-[10px] text-muted"><span class="lang-ru">выручка</span><span class="lang-en">revenue</span></span></div>
+                  <div class="flex w-full flex-col items-center gap-1.5"><div class="w-full rounded bg-[#f87171]/80" style="height:54px"></div><span class="text-[10px] text-muted"><span class="lang-ru">маркет.</span><span class="lang-en">mktg</span></span></div>
+                  <div class="flex w-full flex-col items-center gap-1.5"><div class="w-full rounded bg-[#f87171]/80" style="height:40px"></div><span class="text-[10px] text-muted"><span class="lang-ru">орг</span><span class="lang-en">ops</span></span></div>
+                  <div class="flex w-full flex-col items-center gap-1.5"><div class="w-full rounded bg-accent" style="height:72px"></div><span class="text-[10px] text-accentL"><span class="lang-ru">вклад</span><span class="lang-en">contrib.</span></span></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 5: AI in Telegram -->
+          <article class="kf-slide w-[88%] shrink-0 snap-start sm:w-[620px]">
+            <div class="glass grid h-full gap-6 rounded-2xl p-7 sm:grid-cols-2 sm:items-center">
+              <div>
+                <span class="mb-4 grid h-9 w-9 place-items-center rounded-lg bg-accent/15 text-accentL"><i class="ph ph-chat-circle-dots text-[19px]"></i></span>
+                <h3 class="text-[19px] font-700"><span class="lang-ru">AI-аналитик в Telegram</span><span class="lang-en">AI analyst in Telegram</span></h3>
+                <p class="mt-2 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Спросите словами - получите ответ с цифрами. Аналитик в кармане, без дашбордов и обучения.</span><span class="lang-en">Ask in plain words, get numbers back. An analyst in your pocket, no dashboards to learn.</span></p>
+              </div>
+              <div class="space-y-2">
+                <div class="flex justify-end"><div class="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-3 py-1.5 text-[12.5px] text-white"><span class="lang-ru">Прибыль за месяц?</span><span class="lang-en">Profit this month?</span></div></div>
+                <div class="flex justify-start"><div class="max-w-[88%] rounded-2xl rounded-bl-md bg-white/[.06] px-3 py-2 text-[12.5px] leading-relaxed"><span class="lang-ru">Вклад <b class="text-green">+1.2 млн ₽</b> по 14 концертам. Лучший - «[город]», +280k.</span><span class="lang-en">Contribution <b class="text-green">+1.2M ₽</b> across 14 shows. Best one +280k.</span></div></div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div id="kf-dots" class="mt-7 flex justify-center gap-2"></div>
+      </div>
+    </section>
+
+    <!-- ── HOW IT WORKS ────────────────────────────────────────────────── -->
+    <section class="hairline">
+      <div class="mx-auto max-w-shell px-6 py-24 md:py-32">
+        <h2 class="reveal mb-14 max-w-[20ch] font-display text-[34px] font-600 leading-[1.08] tracking-[-0.02em] sm:text-[44px]">
+          <span class="lang-ru">Подключили один раз - дальше само</span>
+          <span class="lang-en">Connect once, then it runs itself</span>
+        </h2>
+        <div class="reveal grid gap-px overflow-hidden rounded-2xl border border-white/10 md:grid-cols-3">
+          <div class="bg-white/[.02] p-7">
+            <p class="font-display text-[15px] font-600 text-accentL">01</p>
+            <p class="mt-4 text-[18px] font-600"><span class="lang-ru">Подключите источники</span><span class="lang-en">Connect your sources</span></p>
+            <p class="mt-2 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Билетная платформа, рекламные кабинеты и Метрика - по ключам, за минуты.</span><span class="lang-en">Ticketing, ad accounts and analytics by API key, in minutes.</span></p>
+          </div>
+          <div class="bg-white/[.02] p-7">
+            <p class="font-display text-[15px] font-600 text-accentL">02</p>
+            <p class="mt-4 text-[18px] font-600"><span class="lang-ru">Данные сводятся сами</span><span class="lang-en">Data unifies itself</span></p>
+            <p class="mt-2 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Продажи, расход, отзывы и финансы синхронизируются и считаются по единым правилам.</span><span class="lang-en">Sales, spend, reviews and finance sync and compute on one set of rules.</span></p>
+          </div>
+          <div class="bg-white/[.02] p-7">
+            <p class="font-display text-[15px] font-600 text-accentL">03</p>
+            <p class="mt-4 text-[18px] font-600"><span class="lang-ru">Спрашивайте и реагируйте</span><span class="lang-en">Ask, and act</span></p>
+            <p class="mt-2 text-[14px] leading-relaxed text-muted"><span class="lang-ru">Задавайте вопросы боту и получайте алёрты, когда что-то идёт не так.</span><span class="lang-en">Ask the bot anything and get alerts the moment something slips.</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PROOF (product preview) ─────────────────────────────────────── -->
+    <section class="mx-auto max-w-shell px-6 py-24 md:py-32">
+      <div class="reveal mb-10 max-w-[44ch]">
+        <h2 class="font-display text-[34px] font-700 leading-[1.06] tracking-[-0.025em] sm:text-[44px]">
+          <span class="lang-ru">Работает на реальном<br>концертном бизнесе</span>
+          <span class="lang-en">Running on a real<br>live-events business</span>
+        </h2>
+        <p class="mt-4 text-[16px] leading-relaxed text-muted"><span class="lang-ru">soldout.ai управляет живыми концертами и продажами билетов каждый день. Цифры обезличены.</span><span class="lang-en">soldout.ai runs live concerts and ticket sales every day. Figures anonymized.</span></p>
+      </div>
+
+      <!-- real aggregate proof band (anonymized, from production) -->
+      <div class="reveal mb-12 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/10 sm:grid-cols-4">
+        <div class="bg-white/[.02] p-6 sm:p-7">
+          <p class="font-mark text-[30px] font-600 leading-none text-content sm:text-[36px]">82</p>
+          <p class="mt-2 text-[13px] text-muted"><span class="lang-ru">концерта под аналитикой</span><span class="lang-en">shows under analytics</span></p>
+        </div>
+        <div class="bg-white/[.02] p-6 sm:p-7">
+          <p class="font-mark text-[30px] font-600 leading-none text-content sm:text-[36px]">9,1<span class="text-[18px] text-accentL"> млн ₽</span></p>
+          <p class="mt-2 text-[13px] text-muted"><span class="lang-ru">оборота под управлением</span><span class="lang-en">GMV under management</span></p>
+        </div>
+        <div class="bg-white/[.02] p-6 sm:p-7">
+          <p class="font-mark text-[30px] font-600 leading-none text-content sm:text-[36px]">5&thinsp;135</p>
+          <p class="mt-2 text-[13px] text-muted"><span class="lang-ru">билетов продано</span><span class="lang-en">tickets sold</span></p>
+        </div>
+        <div class="bg-white/[.02] p-6 sm:p-7">
+          <p class="font-mark text-[30px] font-600 leading-none text-content sm:text-[36px]">2&thinsp;552</p>
+          <p class="mt-2 text-[13px] text-muted"><span class="lang-ru">зрителя в базе</span><span class="lang-en">fans in the base</span></p>
+        </div>
+      </div>
+
+      <p class="reveal mb-4 text-[13px] font-600 uppercase tracking-[0.14em] text-muted"><span class="lang-ru">Пример экрана</span><span class="lang-en">Product screen</span></p>
+
+      <div class="reveal glass overflow-hidden rounded-2xl">
+        <div class="flex items-center justify-between border-b border-white/10 px-6 py-4">
+          <p class="text-[14px] font-600"><span class="lang-ru">Расход / выручка / ROMI по дням</span><span class="lang-en">Spend / revenue / ROMI by day</span></p>
+          <span class="chip rounded-full px-3 py-1 text-[12px] text-muted"><span class="lang-ru">Последние 7 дней</span><span class="lang-en">Last 7 days</span></span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[640px] text-[13px]">
+            <thead class="text-[11px] uppercase tracking-wider text-muted">
+              <tr class="border-b border-white/[.06] [&>th]:px-6 [&>th]:py-3 [&>th]:text-right [&>th:first-child]:text-left">
+                <th><span class="lang-ru">Дата</span><span class="lang-en">Date</span></th>
+                <th>Я.Директ</th><th>VK</th><th><span class="lang-ru">Наружка</span><span class="lang-en">Outdoor</span></th>
+                <th><span class="lang-ru">Выручка</span><span class="lang-en">Revenue</span></th><th>ROMI</th>
+              </tr>
+            </thead>
+            <tbody class="[&>tr>td]:px-6 [&>tr>td]:py-3 [&>tr>td]:text-right [&>tr>td:first-child]:text-left [&>tr]:border-b [&>tr]:border-white/[.04]">
+              <tr><td class="text-muted">11.06</td><td>39 430</td><td>51 169</td><td>15 794</td><td>192 100</td><td class="text-green font-600">+81%</td></tr>
+              <tr><td class="text-muted">12.06</td><td>58 063</td><td>56 853</td><td>15 794</td><td>277 455</td><td class="text-green font-600">+112%</td></tr>
+              <tr><td class="text-muted">13.06</td><td>42 161</td><td>57 077</td><td>15 794</td><td>157 280</td><td class="text-green font-600">+37%</td></tr>
+              <tr><td class="text-muted">15.06</td><td>53 373</td><td>74 679</td><td>14 574</td><td>231 405</td><td class="text-green font-600">+62%</td></tr>
+              <tr><td class="text-muted">17.06</td><td>52 582</td><td>54 589</td><td>14 574</td><td>200 690</td><td class="text-green font-600">+88%</td></tr>
+            </tbody>
+            <tfoot>
+              <tr class="[&>td]:px-6 [&>td]:py-3.5 [&>td]:text-right [&>td:first-child]:text-left font-600">
+                <td><span class="lang-ru">Итого</span><span class="lang-en">Total</span></td><td>322 319</td><td>422 279</td><td>106 899</td><td>1 379 620</td><td class="text-green">+62%</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      <p class="reveal mt-3 text-[12px] text-muted"><span class="lang-ru">Пример данных.</span><span class="lang-en">Sample data.</span></p>
+    </section>
+
+    <!-- ── CTA / REQUEST ───────────────────────────────────────────────── -->
+    <section id="request" class="hairline">
+      <div class="mx-auto max-w-shell px-6 py-24 md:py-32">
+        <div class="glass mx-auto max-w-[860px] rounded-[26px] p-8 text-center sm:p-12">
+          <h2 class="reveal mx-auto max-w-[20ch] font-display text-[32px] font-600 leading-[1.08] tracking-[-0.02em] sm:text-[42px]">
+            <span class="lang-ru">Готовы увидеть свой бизнес яснее?</span>
+            <span class="lang-en">Ready to see your business clearly?</span>
+          </h2>
+          <p class="reveal mx-auto mt-4 max-w-[48ch] text-[16px] leading-relaxed text-muted">
+            <span class="lang-ru">Оставьте контакт или напишите в Telegram - покажем систему на ваших данных.</span>
+            <span class="lang-en">Leave your contact or message us on Telegram. We will show the system on your data.</span>
+          </p>
+
+          <form id="lead" class="reveal mx-auto mt-8 flex max-w-[520px] flex-col gap-3 sm:flex-row">
+            <label class="sr-only" for="email">Email</label>
+            <input id="email" name="email" type="email" required placeholder="you@email.com"
+                   class="flex-1 rounded-full border border-white/12 bg-white/[.04] px-5 py-3 text-[15px] text-content placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40" />
+            <button type="submit"
+                    class="btn-press rounded-full bg-accent px-6 py-3 text-[15px] font-600 text-white shadow-[0_10px_30px_rgba(139,92,246,.4)] transition hover:bg-accentL">
+              <span class="lang-ru">Оставить заявку</span><span class="lang-en">Request access</span>
+            </button>
+          </form>
+
+          <p class="reveal mt-5 text-[14px] text-muted">
+            <span class="lang-ru">или напишите напрямую</span><span class="lang-en">or reach us directly</span>
+            <a href="https://t.me/pasee2" target="_blank" rel="noopener" class="ml-1 text-accentL hover:underline">@pasee2</a>
+            <span class="mx-1.5 text-white/20">·</span>
+            <a href="mailto:aka.alius@gmail.com" class="text-accentL hover:underline">aka.alius@gmail.com</a>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── FOOTER ──────────────────────────────────────────────────────── -->
+    <footer class="hairline">
+      <div class="mx-auto flex max-w-shell flex-col items-center justify-between gap-5 px-6 py-10 sm:flex-row">
+        <a href="#" class="flex items-center gap-2.5">
+          <svg width="22" height="22" viewBox="0 0 26 26" fill="none"><path d="M3 19L9 12.5L13 15.5L21.5 6.5" stroke="#a78bfa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21.5" cy="6.5" r="3" fill="#8b5cf6"/></svg>
+          <span class="font-mark text-[15px] font-500">soldout<span class="text-accentL">.ai</span></span>
+        </a>
+        <p class="text-[13px] text-muted">
+          <span class="lang-ru">Аналитика и маркетинг для концертного бизнеса</span>
+          <span class="lang-en">Analytics and marketing for the live-events business</span>
+        </p>
+        <div class="flex items-center gap-4 text-[13px]">
+          <a href="https://t.me/pasee2" target="_blank" rel="noopener" class="text-muted transition hover:text-content">Telegram</a>
+          <a href="mailto:aka.alius@gmail.com" class="text-muted transition hover:text-content">Email</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var saved = localStorage.getItem("soldout-lang");
+      if (saved === "ru" || saved === "en") setLang(saved);
+
+      function setLang(l) {
+        root.setAttribute("data-lang", l);
+        root.setAttribute("lang", l);
+        localStorage.setItem("soldout-lang", l);
+        document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+          var on = b.getAttribute("data-set-lang") === l;
+          b.classList.toggle("text-content", on);
+          b.classList.toggle("text-muted", !on);
+          b.classList.toggle("bg-white/10", on);
+        });
+      }
+      document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+        b.addEventListener("click", function () { setLang(b.getAttribute("data-set-lang")); });
+      });
+      setLang(root.getAttribute("data-lang"));
+    })();
+
+    /* Scroll reveal */
+    (function () {
+      var els = document.querySelectorAll(".reveal");
+      if (!("IntersectionObserver" in window)) { els.forEach(function (e) { e.classList.add("in"); }); return; }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
+        });
+      }, { threshold: 0.16, rootMargin: "0px 0px -8% 0px" });
+      els.forEach(function (e) { io.observe(e); });
+    })();
+
+    /* Lead form - MVP: open prefilled email. Swap for Formspree/Getform in prod. */
+    (function () {
+      var f = document.getElementById("lead");
+      if (!f) return;
+      f.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var email = (document.getElementById("email") || {}).value || "";
+        var ru = document.documentElement.getAttribute("data-lang") === "ru";
+        var subject = ru ? "Заявка с лендинга soldout.ai" : "soldout.ai access request";
+        var body = (ru ? "Контакт: " : "Contact: ") + email;
+        window.location.href = "mailto:aka.alius@gmail.com?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+      });
+    })();
+
+    /* Interactive AI demo - streamed mock answers */
+    (function () {
+      var thread = document.getElementById("chat-thread");
+      var rail = document.getElementById("demo-rail");
+      if (!thread || !rail) return;
+      var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      var SPARK = '<svg class="mt-2.5" width="100%" height="34" viewBox="0 0 220 34" preserveAspectRatio="none" fill="none"><polyline points="2,26 34,22 66,24 98,16 130,18 162,9 200,11 218,5" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="218" cy="5" r="3.2" fill="#8b5cf6"/></svg>';
+
+      var QA = [
+        { q: { ru: "Какой ROMI за сегодня?", en: "ROMI for today?" },
+          a: { ru: 'ROMI за сегодня <b class="text-green">88%</b>. Выручка <b>200 690 ₽</b>, расход <b>106 756 ₽</b>. Лучший канал <b class="text-content">VK</b> (+26%).',
+               en: 'ROMI today is <b class="text-green">88%</b>. Revenue <b>200,690 ₽</b>, spend <b>106,756 ₽</b>. Top channel <b class="text-content">VK</b> (+26%).' },
+          extra: SPARK },
+        { q: { ru: "Какой концерт в минусе?", en: "Which show is losing money?" },
+          a: { ru: 'В минусе один концерт: вклад <b class="text-[#f87171]">-42 000 ₽</b>. Причина: заполняемость <b>38%</b> при высоком расходе на рекламу.',
+               en: 'One show is in the red: contribution <b class="text-[#f87171]">-42,000 ₽</b>. Cause: <b>38%</b> fill at a high ad spend.' } },
+        { q: { ru: "Успеем распродать зал?", en: "Will we sell out in time?" },
+          a: { ru: 'Прогноз <b class="text-green">92%</b> к дате. Сигнал <b class="text-green">on track</b>: продаёте 47 билетов в день при плане 41. Идёте с опережением.',
+               en: 'Forecast <b class="text-green">92%</b> by showtime. Signal <b class="text-green">on track</b>: selling 47 tickets a day vs a plan of 41. Running ahead.' } },
+        { q: { ru: "Куда сливается бюджет?", en: "Where is the budget leaking?" },
+          a: { ru: 'Кампания «РСЯ-Май» в минусе <b class="text-[#f87171]">-66%</b> за неделю. Совет: выключить и перелить бюджет в VK.',
+               en: 'Campaign «RSYA-May» is at <b class="text-[#f87171]">-66%</b> this week. Suggestion: pause it and move budget to VK.' } }
+      ];
+
+      function lang() { return document.documentElement.getAttribute("data-lang") === "en" ? "en" : "ru"; }
+
+      function userBubble(text) {
+        var w = document.createElement("div");
+        w.className = "flex justify-end";
+        w.innerHTML = '<div class="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-3.5 py-2 text-[13.5px] text-white">' + text + '</div>';
+        thread.appendChild(w);
+      }
+      function typing() {
+        var w = document.createElement("div");
+        w.className = "flex justify-start gap-1 px-1 pt-0.5";
+        w.innerHTML = '<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-muted"></span><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-muted" style="animation-delay:.2s"></span><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-muted" style="animation-delay:.4s"></span>';
+        thread.appendChild(w);
+        return w;
+      }
+      function streamHTML(el, html, done) {
+        var tokens = [], re = /(<[^>]+>)|([^<]+)/g, m;
+        while ((m = re.exec(html))) {
+          if (m[1]) tokens.push(m[1]);
+          else for (var c = 0; c < m[2].length; c++) tokens.push(m[2][c]);
+        }
+        var out = "", k = 0;
+        (function step() {
+          if (k >= tokens.length) { done && done(); return; }
+          var tk = tokens[k++];
+          out += tk; el.innerHTML = out;
+          setTimeout(step, tk.charAt(0) === "<" ? 0 : 13);
+        })();
+      }
+
+      var busy = false;
+      function ask(i) {
+        if (busy) return; busy = true;
+        var L = lang();
+        thread.innerHTML = "";
+        userBubble(QA[i].q[L]);
+        var t = typing();
+        setTimeout(function () {
+          t.remove();
+          var w = document.createElement("div"); w.className = "flex justify-start";
+          var bubble = document.createElement("div");
+          bubble.className = "max-w-[88%] rounded-2xl rounded-bl-md bg-white/[.06] px-3.5 py-3 text-[13.5px] leading-relaxed";
+          w.appendChild(bubble); thread.appendChild(w);
+          if (reduce) { bubble.innerHTML = QA[i].a[L] + (QA[i].extra || ""); busy = false; return; }
+          streamHTML(bubble, QA[i].a[L], function () {
+            if (QA[i].extra) bubble.insertAdjacentHTML("beforeend", QA[i].extra);
+            busy = false;
+          });
+        }, reduce ? 0 : 620);
+      }
+
+      QA.forEach(function (item, i) {
+        var b = document.createElement("button");
+        b.className = "demo-q chip rounded-full px-3 py-1.5 text-[12.5px] transition hover:bg-white/[.08]";
+        b.innerHTML = '<span class="lang-ru">' + item.q.ru + '</span><span class="lang-en">' + item.q.en + '</span>';
+        b.addEventListener("click", function () { ask(i); });
+        rail.appendChild(b);
+      });
+
+      setTimeout(function () { ask(0); }, 850);
+    })();
+
+    /* Killer-features carousel */
+    (function () {
+      var track = document.getElementById("kf-track");
+      var dots = document.getElementById("kf-dots");
+      if (!track || !dots) return;
+      var slides = track.querySelectorAll(".kf-slide");
+      if (!slides.length) return;
+      var prev = document.getElementById("kf-prev");
+      var next = document.getElementById("kf-next");
+      function step() { return slides[0].getBoundingClientRect().width + 16; }
+
+      slides.forEach(function (s, i) {
+        var d = document.createElement("button");
+        d.setAttribute("aria-label", "Slide " + (i + 1));
+        d.addEventListener("click", function () { track.scrollTo({ left: i * step(), behavior: "smooth" }); });
+        dots.appendChild(d);
+      });
+      if (prev) prev.addEventListener("click", function () { track.scrollBy({ left: -step(), behavior: "smooth" }); });
+      if (next) next.addEventListener("click", function () { track.scrollBy({ left: step(), behavior: "smooth" }); });
+
+      function update() {
+        var i = Math.max(0, Math.min(slides.length - 1, Math.round(track.scrollLeft / step())));
+        dots.querySelectorAll("button").forEach(function (d, k) {
+          d.className = "h-2 rounded-full transition-all " + (k === i ? "w-5 bg-accentL" : "w-2 bg-white/20");
+        });
+      }
+      track.addEventListener("scroll", update, { passive: true });
+      window.addEventListener("resize", update);
+      update();
+    })();
+  </script>
+</body>
+</html>
